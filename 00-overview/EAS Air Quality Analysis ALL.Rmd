@@ -26,8 +26,8 @@ process for a normal workflow.
 
 ## QuantAQ Data
 
-Download all of the monthly QuantAQ files you're interested in
-analyzing.
+Download the full time series from the sensor(s) you're interested in
+from the QuantAQ website.
 
 ## Meteorology Data
 
@@ -54,12 +54,12 @@ blank string
 In order to easily import the data, we'll store the data in the
 following way:
 
--   Store all the QuantAQ data in the folder called "quant_aq", which is
-    a subfolder in "/data" folder of this workspace.\
--   Store the meteorology data in the "/data" folder in this workspace.
-    Store the file as "metdata.csv"
+-   Store all the QuantAQ data in the folder called ./data/quant_aq,
+    which is a subfolder in "/data" folder of this workspace.
+-   Store the meteorology data in the ./data/met folder in this
+    workspace.
 
-# AIR QUALITY DATA LOADING    
+# AIR QUALITY DATA LOADING
 
 # Loading initial packages
 
@@ -68,6 +68,10 @@ following way:
 library(data.table) #to use the data.table variable type
 library(dplyr) #this library allows you to use the %>% operator
 library(tidyr) #this library lets you use the complete function to account for time syncing
+library(tidyverse) #this library allows .csv reading
+library(lubridate) #deals with datetime formatting
+library(openair) #this package efficiently geinerates figures for air quality data analysis. it's our best friend.
+library(openairmaps) #this package will allow us to superimpose openair figures onto maps later on.
 
 ```
 
@@ -75,7 +79,7 @@ library(tidyr) #this library lets you use the complete function to account for t
 
 ```{r}
 # Here's where you'll define the file path for your data file and load the data.
-data_file <- "./data/quant_aq/MOD-00028-Roxbury.csv"  # Data file path for AQ data
+data_file <- "./data/quant_aq/MOD-PM-00545-Montreal.csv"  # Data file path for AQ data
 aq_df <- read_csv(data_file)  # Load the data with read_csv command (there are a bunch of ways to get this done, but this one is efficient and quick). This creates a data frame called "aq_df".
 
 
@@ -94,8 +98,8 @@ summary(aq_df)
 # Date formatting
 
 ```{r}
-# Dates and times have a bunch of different possible formats. These formats can be the bane of your analysis existence. Thankfully the lubridate package makes things smoother. It even automatically detects daylight saving time!
-library(lubridate)
+# Dates and times have a bunch of different possible formats. These formats can be the bane of your analysis existence. Thankfully the lubridate package (which we loaded above) makes things smoother. It even automatically detects daylight saving time!
+# $ is used to get or create the attribute of a variable, i.e. "date" of "aq_df" var
 aq_df$date <- as.POSIXct(strptime(aq_df$timestamp_local, format = "%Y-%m-%d %H:%M:%S", tz = "America/New_York"))
 
 
@@ -108,13 +112,13 @@ aq_df$date <- as.POSIXct(strptime(aq_df$timestamp_local, format = "%Y-%m-%d %H:%
 # As you look at this time series, what sticks out to you?
 # Where do you notice points that seem outside of what is reasonable?
 
-library(openair)
+# OpenAir function
+# timePlot(aq_df, pollutant = "co")
 
-timePlot(aq_df, pollutant = "co")
-
-#timePlot(aq_df, pollutant = c("co", "o3", "no", "no2", "pm1", "pm25", "pm10"), scales= "free")
-#timePlot(aq_df, pollutant = c("co", "o3", "no", "no2"), scales= "free")
-#timePlot(aq_df, pollutant = c("pm1", "pm25", "pm10"), scales= "free")
+# c() is matrix, y.relation="free" allows different y-scales
+#timePlot(aq_df, pollutant = c("co", "o3", "no", "no2", "pm1", "pm25", "pm10"), y.relation= "free")
+#timePlot(aq_df, pollutant = c("co", "o3", "no", "no2"), y.relation= "free")
+timePlot(aq_df, pollutant = c("pm1", "pm25", "pm10"), y.relation= "free")
 
 
 
@@ -140,9 +144,9 @@ outlierReplace = function(dataframe, cols, rows, newValue = NA) {
 pm10_threshold <- 1000
 pm25_threshold <- 100
 pm1_threshold <- 50
-no_threshold <-150
+no_threshold <- 30
 no2_threshold <- 400
-co_threshold <- 5000
+co_threshold <- 4000
 o3_threshold <- 200
 ws_threshold <- 10  # in m/s; filtered after mph to m/s conversion
 
@@ -160,20 +164,20 @@ outlierReplace(aq_df_filtered, "pm10", which(aq_df_filtered$pm10 > pm10_threshol
 outlierReplace(aq_df_filtered, "pm25", which(aq_df_filtered$pm25 > pm25_threshold), NA)
 outlierReplace(aq_df_filtered, "pm1", which(aq_df_filtered$pm1 > pm1_threshold), NA)
 
-outlierReplace(aq_df_filtered, "no", which(aq_df_filtered$no > no_threshold), NA)
-outlierReplace(aq_df_filtered, "no2", which(aq_df_filtered$no2 > no2_threshold), NA)
-outlierReplace(aq_df_filtered, "co", which(aq_df_filtered$co > co_threshold), NA)
-outlierReplace(aq_df_filtered, "o3", which(aq_df_filtered$o3 > o3_threshold), NA)
+# outlierReplace(aq_df_filtered, "no", which(aq_df_filtered$no > no_threshold), NA)
+# outlierReplace(aq_df_filtered, "no2", which(aq_df_filtered$no2 > no2_threshold), NA)
+# outlierReplace(aq_df_filtered, "co", which(aq_df_filtered$co > co_threshold), NA)
+# outlierReplace(aq_df_filtered, "o3", which(aq_df_filtered$o3 > o3_threshold), NA)
 
 # Filter out below zero, since negative pollutant concentrations aren't real
 outlierReplace(aq_df_filtered, "pm10", which(aq_df_filtered$pm10 < 0), NA)
 outlierReplace(aq_df_filtered, "pm25", which(aq_df_filtered$pm25 < 0), NA)
 outlierReplace(aq_df_filtered, "pm1", which(aq_df_filtered$pm1 < 0), NA)
 
-outlierReplace(aq_df_filtered, "no", which(aq_df_filtered$no < 0), NA)
-outlierReplace(aq_df_filtered, "no2", which(aq_df_filtered$no2 < 0), NA)
-outlierReplace(aq_df_filtered, "co", which(aq_df_filtered$co < 0), NA)
-outlierReplace(aq_df_filtered, "o3", which(aq_df_filtered$o3 < 0), NA)
+# outlierReplace(aq_df_filtered, "no", which(aq_df_filtered$no < 0), NA)
+# outlierReplace(aq_df_filtered, "no2", which(aq_df_filtered$no2 < 0), NA)
+# outlierReplace(aq_df_filtered, "co", which(aq_df_filtered$co < 0), NA)
+# outlierReplace(aq_df_filtered, "o3", which(aq_df_filtered$o3 < 0), NA)
 
 
 
@@ -182,22 +186,23 @@ outlierReplace(aq_df_filtered, "o3", which(aq_df_filtered$o3 < 0), NA)
 ## Sanity check time series - did you do your cleaning job?
 
 ```{r}
-timePlot(aq_df, pollutant = "co")
+# timePlot(aq_df_filtered, pollutant = "co")
 
-#timePlot(aq_df, pollutant = c("co", "o3", "no", "no2", "pm1", "pm25", "pm10"), scales= "free")
-#timePlot(aq_df, pollutant = c("co", "o3", "no", "no2"), scales= "free")
-#timePlot(aq_df, pollutant = c("pm1", "pm25", "pm10"), scales= "free")
+#timePlot(aq_df_filtered, pollutant = c("co", "o3", "no", "no2", "pm1", "pm25", "pm10"), scales= "free")
+#timePlot(aq_df_filtered, pollutant = c("co", "o3", "no", "no2"), scales= "free")
+timePlot(selectByDate(aq_df_filtered, year=2023, month=6), pollutant = c("pm1", "pm25", "pm10"), scales= "free")
 
 ```
 
 # LOADING AND MERGING METEOROLOGY DATA
+
 # Meteorology Data
 
 ```{r}
 # Now we'll import and sync meteorology data set up analysis of air pollutant concentrations related to local meteorology.
 
 # Set directory and file for met data
-met_file <- "data/met/boston_met.csv"
+met_file <- "data/met/montreal_met.csv"
 
 # Read met data
 metdata <- fread(met_file, header=TRUE, data.table = TRUE) #import meteorology file using a different method than we used above
@@ -264,11 +269,13 @@ timePlot(aq_df_met, pollutant = c("ws", "wd", "tmpc", "pm1"), scales = "free")
 # Diurnals: First look at a "typical day" for different pollutants
 # Read openair manual to find different ways to use this function. Things that may be helpful: selectByDate; type (season, etc); normalise; subset
 
-timeVariation(aq_df_met, pollutant = c("no", "no2", "co"), local.tz= "America/New_York", normalise = TRUE) 
-timeVariation(aq_df_met, pollutant = "o3", statistic = "median", local.tz= "America/New_York", col = "firebrick", subset = "hour") 
+# timeVariation(aq_df_met, pollutant = c("no", "no2", "co"), local.tz= "America/New_York", normalise = TRUE) 
+
 timeVariation(aq_df_met, pollutant = c("pm1", "pm25", "pm10"), local.tz= "America/New_York") 
 
 # timeVariation(selectByDate(aq_df_met, month = c(1:5, 9:12)), pollutant = c('pm1', 'pm25', 'pm10'))
+# myOutput <- timeVariation(aq_df_met, pollutant = "o3", statistic = "median", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour") 
+# plot(myOutput, subset = "hour")
 
 ```
 
@@ -281,8 +288,8 @@ timeVariation(aq_df_met, pollutant = c("pm1", "pm25", "pm10"), local.tz= "Americ
 # Pueblo: 38.16,-104.624
 # Hartford: 41.784874,-72.6315
 
-aq_df_met$lat <- 41.784874
-aq_df_met$long <- -72.6315
+aq_df_met$lat <- 45.392796
+aq_df_met$long <- -74.062294
 
 
 ```
@@ -294,13 +301,13 @@ aq_df_met$long <- -72.6315
 
 # There are a bunch of different things you can define here - type (seasonal, etc), statistic (median, mean, max, standard deviation, etc), color scale limits, icon size, figure transparency, etc. In particular, the type and statistic inputs give you *very* different pictures of what's happening in an environment.
 
-polarPlot(aq_df_met, pollutant = "no")
-polarPlot(aq_df_met, pollutant = "no", type = "season")
-polarPlot(aq_df_met, pollutant = "no", limits = c(0,8), type = "season")
-polarFreq(aq_df_met, pollutant = "no")
-pollutionRose(aq_df_met, pollutant = "no")
-polarAnnulus(aq_df_met, pollutant = "no")
-polarCluster(aq_df_met, pollutant = "no", n.clusters = 4)
+polarPlot(aq_df_met, pollutant = "pm10")
+polarPlot(aq_df_met, pollutant = "pm10", type = "season")
+polarPlot(aq_df_met, pollutant = "pm10", limits = c(0,8), type = "season")
+polarFreq(aq_df_met, pollutant = "pm10")
+pollutionRose(aq_df_met, pollutant = "pm10")
+polarAnnulus(aq_df_met, pollutant = "pm10")
+polarCluster(aq_df_met, pollutant = "pm10", n.clusters = 4)
 
 
 
@@ -369,7 +376,7 @@ polarMap(aq_df_met,
 
 ```
 
-### Create some calendar plots to explore long-term tempral trends
+### Create some calendar plots to explore long-term temporal trends
 
 ```{r}
 # These can help identify specific dates or ranges of dates that had particularly high pollutant concentrations. You may want to look more closely at conspicuously elevated pollutant days.
@@ -381,7 +388,7 @@ calendarPlot(aq_df_met, pollutant = "pm10", limits = c(0,80))
 calendarPlot(aq_df_met, pollutant = "pm10", annotate = "value", limits = c(0,80),
 lim =50, cols = "Purples", col.lim = c("black", "orange"), layout = c(4, 3))
 
-trendLevel(aq_df_met, pollutant = "no", limits = c(0,30))
+trendLevel(aq_df_met, pollutant = "pm25", limits = c(0,30))
 
 
 ```
