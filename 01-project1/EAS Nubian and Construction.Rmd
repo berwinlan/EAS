@@ -5,9 +5,11 @@ date: "2024-02-13"
 ---
 
 ## Initial Setup
+
 ```{r, warning= FALSE, error = FALSE}
 # Check and install required packages if necessary
-packages <- c("openair", "openairmaps", "leaflet", "dplyr", "chron", "timeDate", "data.table", "tidyr", "latticeExtra")
+
+packages <- c("openair", "openairmaps", "leaflet", "dplyr", "chron", "timeDate", "data.table", "tidyr", "latticeExtra", "tidyverse", "lubridate")
 install.packages(packages[!sapply(packages, requireNamespace, quietly = TRUE)])
 
 # Load required packages for data manipulation and analysis
@@ -21,13 +23,194 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 load("./data/roxbury_df_filtered.RData")
 ```
 
-## 
+# Data prep for MOD-00025
+
+Go to <https://app.quant-aq.com/device/MOD-00025> and download "final" full-resolution data from at least before October 2023, which is when construction ended.
+
+Add it to your data/quant_aq folder as the file MOD-00025-Roxbury.csv. You'll also need the met data from 00-overview.
+
+```{r}
+# Here's where you'll define the file path for your data file and load the data.
+data_file <- "./data/quant_aq/MOD-00025-Roxbury.csv"  # Data file path for AQ data
+aq_df <- read_csv(data_file)  # Load the data with read_csv command (there are a bunch of ways to get this done, but this one is efficient and quick). This creates a data frame called "aq_df".
+
+```
+
+# Summary statistics
+
+```{r}
+# Looking briefly at summary statistics will give you a sense of the variables that you just loaded. This can also tip you off to things that might need attention. 
+# What do you notice in these summary statistics?
+
+summary(aq_df)
+```
+
+# Date formatting
+
+```{r}
+# Dates and times have a bunch of different possible formats. These formats can be the bane of your analysis existence. Thankfully the lubridate package (which we loaded above) makes things smoother. It even automatically detects daylight saving time!
+# $ is used to get or create the attribute of a variable, i.e. "date" of "aq_df" var
+aq_df$date <- as.POSIXct(strptime(aq_df$timestamp_local, format = "%Y-%m-%d %H:%M:%S", tz = "America/New_York"))
+```
+
+# Time series
+
+```{r}
+# We'll spend a lot of time working with the openair package in our project and will get a more in-depth introduction in the next class. But we'll draw on one of its functions now.
+# As you look at this time series, what sticks out to you?
+# Where do you notice points that seem outside of what is reasonable?
+
+# OpenAir function
+# timePlot(aq_df, pollutant = "co")
+
+# c() is matrix, y.relation="free" allows different y-scales
+#timePlot(aq_df, pollutant = c("co", "o3", "no", "no2", "pm1", "pm25", "pm10"), y.relation= "free")
+#timePlot(aq_df, pollutant = c("co", "o3", "no", "no2"), y.relation= "free")
+timePlot(aq_df, pollutant = c("pm1", "pm25", "pm10"), y.relation= "free")
+```
+
+# CLEANING STEPS
+
+## Define an outlierReplace function now and use it later
+
+```{r}
+outlierReplace = function(dataframe, cols, rows, newValue = NA) {
+    if (any(rows)) {
+        set(dataframe, rows, cols, newValue)
+    }
+}
+```
+
+## Define threshold values
+
+```{r}
+# What are the maximum values you might reasonably expect to see in ambient air?
+# How do these compare with NAAQS?
+pm10_threshold <- 1000
+pm25_threshold <- 100
+pm1_threshold <- 50
+no_threshold <- 30
+no2_threshold <- 400
+co_threshold <- 4000
+o3_threshold <- 200
+ws_threshold <- 10  # in m/s; filtered after mph to m/s conversion
+
+```
+
+## Filter using outlierReplace function
+
+```{r}
+# Replace values above threshold defined above, filter values below zero
+
+aq_df_filtered<-aq_df   # Create a new dataframe that will be filtered and preserve the original
+
+# Filter out above thresholds
+outlierReplace(aq_df_filtered, "pm10", which(aq_df_filtered$pm10 > pm10_threshold), NA)
+outlierReplace(aq_df_filtered, "pm25", which(aq_df_filtered$pm25 > pm25_threshold), NA)
+outlierReplace(aq_df_filtered, "pm1", which(aq_df_filtered$pm1 > pm1_threshold), NA)
+
+outlierReplace(aq_df_filtered, "no", which(aq_df_filtered$no > no_threshold), NA)
+outlierReplace(aq_df_filtered, "no2", which(aq_df_filtered$no2 > no2_threshold), NA)
+outlierReplace(aq_df_filtered, "co", which(aq_df_filtered$co > co_threshold), NA)
+outlierReplace(aq_df_filtered, "o3", which(aq_df_filtered$o3 > o3_threshold), NA)
+
+# Filter out below zero, since negative pollutant concentrations aren't real
+outlierReplace(aq_df_filtered, "pm10", which(aq_df_filtered$pm10 < 0), NA)
+outlierReplace(aq_df_filtered, "pm25", which(aq_df_filtered$pm25 < 0), NA)
+outlierReplace(aq_df_filtered, "pm1", which(aq_df_filtered$pm1 < 0), NA)
+
+outlierReplace(aq_df_filtered, "no", which(aq_df_filtered$no < 0), NA)
+outlierReplace(aq_df_filtered, "no2", which(aq_df_filtered$no2 < 0), NA)
+outlierReplace(aq_df_filtered, "co", which(aq_df_filtered$co < 0), NA)
+outlierReplace(aq_df_filtered, "o3", which(aq_df_filtered$o3 < 0), NA)
+```
+
+## Sanity check time series - did you do your cleaning job?
+
+```{r}
+# timePlot(aq_df_filtered, pollutant = "co")
+
+timePlot(aq_df_filtered, pollutant = c("co", "o3", "no", "no2", "pm1", "pm25", "pm10"), scales= "free")
+#timePlot(aq_df_filtered, pollutant = c("co", "o3", "no", "no2"), scales= "free")
+# timePlot(selectByDate(aq_df_filtered, year=2023, month=6), pollutant = c("pm1", "pm25", "pm10"), scales= "free")
+
+```
+
+# LOADING AND MERGING METEOROLOGY DATA
+
+# Meteorology Data
+
+```{r}
+# Now we'll import and sync meteorology data set up analysis of air pollutant concentrations related to local meteorology.
+
+# Set directory and file for met data
+met_file <- "data/met/boston_met.csv"
+
+# Read met data
+metdata <- fread(met_file, header=TRUE, data.table = TRUE) #import meteorology file using a different method than we used above
+
+#Deal with date/time formatting
+metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M", tz = "America/New_York") #setting datetime, using correct timezone on East Coast Local time
+
+# Rename variables to play well with Openair
+# Use dplyr package to allow for the %>% operator (basically, pass this dataframe through a set of sequantial manipulations)
+
+metdata <- metdata %>%
+  setnames(old = c("drct", "sped", "valid"), new = c("wd", "ws", "original_met_time")) %>% #rename
+  na.omit("date") %>% #if any dates are NA, the following function won't work
+  complete(date = seq(from = min(date), to= max(date),  by = "1 min")) %>%  # make 1 minute intervals, and fill in any missing dates/times with "NA"
+  fill(c("wd", "ws", "tmpc")) # fill those new 1 minute interval rows. "fill" replaces "NA" with the previous valid (non-NA) datapoint.
+
+# Convert wind speed to m/s
+metdata$ws <- metdata$ws * (1609/3600) #converting to m/s, 1609 meters per mile, 3600 seconds per hr
+outlierReplace(metdata, "ws", which(metdata$ws > ws_threshold), NA)
+
+# Remove station data
+metdata[,c( "station")] <- list(NULL) #getting rid of unnecessary variables
+
+# Remove duplicate values. They make lots of stuff messier later.
+metdata <- unique(metdata) 
+```
+
+# Time sync and merge met and pollution data
+
+## Round to get matching timestamps
+
+```{r}
+# First round datetime for each dataframe to 1 min time resolution (they're already at 1 min resolution but may have a different set of seconds)
+aq_df_filtered$date_1min <- round_date(aq_df$date, unit="minute") #round date for merging
+metdata$met_date_1min <- round_date(metdata$date, unit="minute") #round date for merging
+```
+
+## Join meteorology and aq data on 1 min basis
+
+```{r}
+# create new dataframe with 1 min time-synced data
+aq_df_met <- left_join(aq_df_filtered, metdata, by = c("date_1min" = "met_date_1min"))
+
+# deal with a funky naming artifact
+aq_df_met$date <- aq_df_met$date.x
+
+```
+
+## Ensure that merging worked: summary and time series
+
+```{r}
+# Sanity check wind time series
+
+summary(aq_df_met)
+
+timePlot(aq_df_met, pollutant = c("ws", "wd", "tmpc", "pm1"), scales = "free")
+```
+
+# Plot Nubian NOx/CO ratio
+
 ```{r}
 # Calculate NOx to CO ratio for diesel combustion
-my_df$ratio <- (my_df$no + my_df$no2) / my_df$co
+mod_met_filtered$ratio <- (mod_met_filtered$no + mod_met_filtered$no2) / mod_met_filtered$co
 
 nubian_df <- mod_met_filtered %>%
-      filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025'))
+      filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025', 'MOD-00028'))
 
 polarMap(nubian_df,
          pollutant = 'ratio',
@@ -38,7 +221,7 @@ polarMap(nubian_df,
          latitude = "lat",
          longitude = "lon",
          provider = "OpenStreetMap",
-         limits = c(0, 0.30),
+         limits = c(0, 0.15),
          cols = "jet",
          alpha = 0.8,
          key = TRUE,
@@ -47,4 +230,91 @@ polarMap(nubian_df,
          fig.width = 4,
          fig.height = 4
          )
+```
+
+# Construction
+
+## Plot Construction map
+
+```{r}
+construction_df <- mod_met_filtered %>%
+      filter(mod_met_filtered$sn %in% c('MOD-00025', 'MOD-PM-00231'))
+
+# MOD-00025 Oct 2021-July 2023
+# MOD-PM-00231 ends ~July 2023
+
+polarMap(construction_df,
+         pollutant = 'pm10',
+         key.position = "bottom",
+         key.header = 'pm10',
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+         limits = c(0, 0.15),
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+```
+
+## Plot before and after maps for MOD-00025
+
+```{r}
+# MOD-00025 Oct 2021-July 2023
+
+# Before
+polarMap(selectByDate(aq_df_met, start="12/1/2021", end='7/31/2023'),
+         pollutant = 'pm10',
+         key.position = "bottom",
+         key.header = 'pm10',
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+         limits = c(0, 0.15),
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+
+# After
+polarMap(selectByDate(aq_df_met, start='7/31/2023'),
+         pollutant = 'pm10',
+         key.position = "bottom",
+         key.header = 'pm10',
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+         limits = c(0, 0.15),
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+```
+
+## Plot diurnal for MOD-00025
+
+```{r}
+my_df <- mod_met_filtered %>%
+      filter(mod_met_filtered$sn == 'MOD-00025')
+
+myOutput <- timeVariation(my_df, pollutant = 'pm1', local.tz= "America/New_York", limits=c(0, 10))#, subset = "hour")
+plot(myOutput, subset = "hour", data.thresh=0.75)
 ```
