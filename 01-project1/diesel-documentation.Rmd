@@ -23,7 +23,49 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 load("./data/roxbury_df_filtered.RData")
 ```
 
+
+# Plot Nubian NOx/CO ratio
+## Map
+```{r}
+# Calculate NOx to CO ratio for diesel combustion
+mod_met_filtered$ratio <- (mod_met_filtered$no + mod_met_filtered$no2) / mod_met_filtered$co
+
+nubian_df <- mod_met_filtered %>%
+      filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025', 'MOD-00028'))
+
+polarMap(nubian_df,
+         pollutant = 'ratio',
+         key.position = "bottom",
+         key.header = 'ratio',
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+         limits = c(0, 0.15),
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+```
+
+##
+```{r}
+timePlot(mod_met_filtered %>% filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025')), pollutant = "no2", type="sn", avg.time="day", data.thresh=0.75, main='NO2 emissions near Nubian Station', ylim=c(0, 100), auto.text=TRUE)
+trellis.last.object() + layer(panel.abline(h=53, col='blue', lwd=4, lty=2))    #EPA
+trellis.last.object() + layer(panel.abline(h=5.14, col='green', lwd=4, lty=2)) #WHO
+```
+
 # Data prep for MOD-00025
+
+```{r, warning= FALSE, error = FALSE}
+packages <- c("tidyverse", "lubridate")
+install.packages(packages[!sapply(packages, requireNamespace, quietly = TRUE)])
+```
 
 Go to <https://app.quant-aq.com/device/MOD-00025> and download "final" full-resolution data from at least before October 2023, which is when construction ended.
 
@@ -201,35 +243,6 @@ aq_df_met$date <- aq_df_met$date.x
 summary(aq_df_met)
 
 timePlot(aq_df_met, pollutant = c("ws", "wd", "tmpc", "pm1"), scales = "free")
-```
-
-# Plot Nubian NOx/CO ratio
-
-```{r}
-# Calculate NOx to CO ratio for diesel combustion
-mod_met_filtered$ratio <- (mod_met_filtered$no + mod_met_filtered$no2) / mod_met_filtered$co
-
-nubian_df <- mod_met_filtered %>%
-      filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025', 'MOD-00028'))
-
-polarMap(nubian_df,
-         pollutant = 'ratio',
-         key.position = "bottom",
-         key.header = 'ratio',
-         key.footer = NULL,
-         x = "ws",
-         latitude = "lat",
-         longitude = "lon",
-         provider = "OpenStreetMap",
-         limits = c(0, 0.15),
-         cols = "jet",
-         alpha = 0.8,
-         key = TRUE,
-         iconWidth = 200,
-         iconHeight = 200,
-         fig.width = 4,
-         fig.height = 4
-         )
 ```
 
 # Construction
