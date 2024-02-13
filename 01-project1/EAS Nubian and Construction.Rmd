@@ -1,0 +1,50 @@
+---
+title: "EAS Nubian and Construction"
+output: html_document
+date: "2024-02-13"
+---
+
+## Initial Setup
+```{r, warning= FALSE, error = FALSE}
+# Check and install required packages if necessary
+packages <- c("openair", "openairmaps", "leaflet", "dplyr", "chron", "timeDate", "data.table", "tidyr", "latticeExtra")
+install.packages(packages[!sapply(packages, requireNamespace, quietly = TRUE)])
+
+# Load required packages for data manipulation and analysis
+invisible(sapply(packages, library, character.only = TRUE))
+
+# Set options
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+
+
+# Load data frame
+load("./data/roxbury_df_filtered.RData")
+```
+
+## 
+```{r}
+# Calculate NOx to CO ratio for diesel combustion
+my_df$ratio <- (my_df$no + my_df$no2) / my_df$co
+
+nubian_df <- mod_met_filtered %>%
+      filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025'))
+
+polarMap(nubian_df,
+         pollutant = 'ratio',
+         key.position = "bottom",
+         key.header = 'ratio',
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+         limits = c(0, 0.30),
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+```
