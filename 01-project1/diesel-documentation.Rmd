@@ -24,6 +24,12 @@ load("./data/roxbury_df_filtered.RData")
 ```
 
 
+```{r}
+summary(mod_met_filtered %>% filter(mod_met_filtered$sn == 'MOD-00024'))
+summary(mod_met_filtered %>% filter(mod_met_filtered$sn == 'MOD-00025'))
+summary(mod_met_filtered %>% filter(mod_met_filtered$sn == 'MOD-00028'))
+```
+
 # Plot Nubian NOx/CO ratio
 ## Map
 ```{r}
@@ -53,11 +59,14 @@ polarMap(nubian_df,
          )
 ```
 
-##
+## Time plot
 ```{r}
-timePlot(mod_met_filtered %>% filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025')), pollutant = "no2", type="sn", avg.time="day", data.thresh=0.75, main='NO2 emissions near Nubian Station', ylim=c(0, 100), auto.text=TRUE)
-trellis.last.object() + layer(panel.abline(h=53, col='blue', lwd=4, lty=2))    #EPA
-trellis.last.object() + layer(panel.abline(h=5.14, col='green', lwd=4, lty=2)) #WHO
+no2_df = mod_met_filtered %>% filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025', 'MOD-00028'))
+
+no2_df$date <- round_date(no2_df$date, unit = "minute")
+no2_df <- pivot_wider(no2_df, id_cols = date, names_from = sn, values_from = no2, values_fn = {mean})
+names(no2_df)
+timePlot(no2_df, pollutant=c("MOD-00024", "MOD-00025", "MOD-00028"), ylim=c(0, 80), avg.time = "week", group=TRUE, lty=1)
 ```
 
 # Data prep for MOD-00025
