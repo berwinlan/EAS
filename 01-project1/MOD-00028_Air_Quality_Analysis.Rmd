@@ -1,0 +1,635 @@
+---
+title: "Introduction to Air Quality Data Analysis"
+#output: html_notebook
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# Overview
+
+This .rmd file uses a cleaned .rdata file as its starting point - in this case 'roxbury_data_cleaned.rdata', which has the entire dataframe of all sensors in Roxbury. Generally, the code does this:
+
+1. Loads packages
+2. Loads the .rdata file
+3. Filters by sensor or groups of sensors
+4. Sanity checking via data tables and time series
+5. Additional cleaning, as necessary
+6. Plotting functions and exploratory data analysis
+
+   
+
+# Loading initial packages
+
+```{r, warning= FALSE, error = FALSE}
+# Check and install required packages if necessary
+packages <- c("openair", "openairmaps", "leaflet", "dplyr", "chron", "timeDate", "data.table", "tidyr", "latticeExtra")
+install.packages(packages[!sapply(packages, requireNamespace, quietly = TRUE)])
+
+# Load required packages for data manipulation and analysis
+invisible(sapply(packages, library, character.only = TRUE))
+
+# Set options
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+
+```
+
+# AIR QUALITY DATA LOADING 
+## Load Air Quality Data file.
+
+```{r}
+# Load data frame
+load("./data/roxbury_df_filtered.RData")
+
+```
+
+## Filter by the sensor(s) you want to analyze
+```{r}
+# Choose a single sensor - change the SN to choose your sensor. Your individual dataframe will be called 'my_df,' which you can call later for plotting functions
+my_df <- mod_met_filtered %>%
+      filter(mod_met_filtered$sn == 'MOD-00028')
+
+## Confirm that only data for your sensor are represented in the dataframe.
+# unique(my_df$sn)
+
+
+###Below are different permutations of sensor groupings that you can use to analyze data together. For example, the sensors around Nubian Station are: MOD-00024, MOD-00028, MOD-PM-00222, and MOD-00025. Instead of filtering by a single SN, you'll filter by a vector of SNs (c('MOD-00024', 'MOD-00028', 'MOD-PM-00222', 'MOD-00025')).
+
+# Nubian Station (MOD-00024, MOD-00028, MOD-PM-00222, MOD-00025)
+# nubian_data  <- mod_met_filtered %>% 
+#       filter(mod_met_filtered$sn == c('MOD-00024', 'MOD-00028', 'MOD-PM-00222', 'MOD-00025'))
+
+# Commuter rail (MOD-PM-00221, MOD-PM-00224)
+# train_data <- mod_met_filtered %>% 
+#       filter(mod_met_filtered$sn == c('MOD-PM-00221', 'MOD-PM-00224'))
+
+# School buses (MOD-PM-00212, MOD-PM-00214, MOD-PM-00223)
+# school_bus_data <- mod_met_filtered %>% 
+#       filter(mod_met_filtered$sn == c('MOD-PM-00214', 'MOD-PM-00223'))
+
+
+
+# Street buses (MOD-PM-00231, MOD-PM-00213)
+# street_bus_data <- mod_met_filtered %>% 
+#       filter(mod_met_filtered$sn == c('MOD-PM-00231', 'MOD-PM-00213'))
+
+# Malcolm X Park data
+# malcolm_x_data <- mod_met_filtered %>% 
+#       filter(mod_met_filtered$sn == 'MOD-PM-00217')
+
+
+# Known construction sites
+# construction_data <- mod_met_filtered %>% 
+#       filter(mod_met_filtered$sn == c('MOD-00024', 'MOD-PM-00231'))
+
+
+
+
+```
+
+# CLEANING STEPS - already done for 'roxbury_df_filtered.rdata', but it's here if you need to do more cleaning.
+```{r}
+#outlierReplace Function
+outlierReplace = function(dataframe, cols, rows, newValue = NA) {
+    if (any(rows)) {
+        set(dataframe, rows, cols, newValue)
+    }
+}
+```
+
+# Create new columns
+```{r}
+my_df$nox = my_df$no + my_df$no2
+
+my_df$ratio = my_df$nox/my_df$co
+```
+
+
+# Define threshold values
+```{r}
+pm10_threshold <- 1000
+pm25_threshold <- 100
+pm1_threshold <- 50
+no_threshold <-150
+no2_threshold <- 400
+co_threshold <- 5000
+o3_threshold <- 200
+ws_threshold <- 10
+
+```
+
+# Replace values above threshold defined above, filter values below zero
+```{r}
+
+outlierReplace(my_df, "pm10", which(my_df$pm10 > pm10_threshold), NA)
+outlierReplace(my_df, "pm25", which(my_df$pm25 > pm25_threshold), NA)
+outlierReplace(my_df, "pm1", which(my_df$pm1 > pm1_threshold), NA)
+
+outlierReplace(my_df, "no", which(my_df$no > no_threshold), NA)
+outlierReplace(my_df, "no2", which(my_df$no2 > no2_threshold), NA)
+outlierReplace(my_df, "co", which(my_df$co > co_threshold), NA)
+outlierReplace(my_df, "o3", which(my_df$o3 > o3_threshold), NA)
+outlierReplace(my_df, "ws", which(my_df$ws > ws_threshold), NA)
+
+outlierReplace(my_df, "pm10", which(my_df$pm10 < 0), NA)
+outlierReplace(my_df, "pm25", which(my_df$pm25 < 0), NA)
+outlierReplace(my_df, "pm1", which(my_df$pm1 < 0), NA)
+
+outlierReplace(my_df, "no", which(my_df$no < 0), NA)
+outlierReplace(my_df, "no2", which(my_df$no2 < 0), NA)
+outlierReplace(my_df, "co", which(my_df$co < 0), NA)
+outlierReplace(my_df, "o3", which(my_df$o3 < 0), NA)
+
+```
+
+
+
+# Summary statistics
+
+```{r}
+# Looking briefly at summary statistics will give you a sense of the variables that you just loaded. This can also tip you off to things that might need attention. 
+# What do you notice in these summary statistics?
+
+summary(my_df)
+
+```
+
+# Date formatting
+
+```{r}
+# Dates and times have a bunch of different possible formats. These formats can be the bane of your analysis existence. Thankfully the lubridate package (which we loaded above) makes things smoother. It even automatically detects daylight saving time!
+my_df$date <- as.POSIXct(strptime(my_df$timestamp_local.x, format = "%Y-%m-%d %H:%M:%S", tz = "America/New_York"))
+
+
+```
+
+# Time series
+
+```{r}
+# We'll spend a lot of time working with the openair package in our project and will get a more in-depth introduction in the next class. But we'll draw on one of its functions now.
+# As you look at this time series, what sticks out to you?
+# Where do you notice points that seem outside of what is reasonable?
+# Do you need to do additional cleaning, or do things look good?
+
+
+#timePlot(my_df, pollutant = "pm1")
+
+#timePlot(my_df, pollutant = c("co", "o3", "no", "no2", "pm1", "pm25", "pm10"), y.relation= "free")
+# timePlot(my_df, pollutant = c("co", "o3", "no", "no2"), y.relation= "free") #error? does your sensor have gas-phase data or PM only? 
+# timePlot(my_df, pollutant = c("pm1", "pm25", "pm10"), y.relation= "free")
+timePlot(my_df, pollutant = "pm1", y.relation= "free")
+timePlot(my_df, pollutant = "pm25", y.relation= "free")
+
+
+```
+
+
+# EXPLORATORY DATA ANALYSIS
+
+## Temporal variability: Diurnal and annual/seasonal profiles
+
+```{r}
+# Diurnals: First look at a "typical day" for different pollutants
+# Read openair manual to find different ways to use this function. Things that may be helpful: selectByDate; type (season, etc); normalise; subset
+
+
+# Basic diurnal plots:
+timeVariation(my_df, pollutant = c("no", "no2", "o3", "co"), local.tz= "America/New_York", normalise = TRUE) #error? does your sensor have gas-phase data, or PM only?
+timeVariation(my_df, pollutant = c("pm1", "pm25", "pm10"), normalise = TRUE, local.tz= "America/New_York") 
+
+# Non-normalized diurnal plots:
+timeVariation(my_df, pollutant = c("no", "no2", "o3", "co"), local.tz= "America/New_York", normalise = FALSE) #error? does your sensor have gas-phase data, or PM only?
+timeVariation(my_df, pollutant = c("pm1", "pm25", "pm10"), normalise = FALSE, local.tz= "America/New_York")
+```
+## Temporal variability: seasonal by hour
+
+```{r}
+# If you want to select by certain months:
+# timeVariation(selectByDate(my_df, month = c(1:5, 9:12)), pollutant = c('pm1', 'pm25', 'pm10'))
+
+# # If you want to create just a subset of the timeVariation output (diurnals only; seasonal only, etc)
+# myOutput <- timeVariation(my_df, pollutant = "pm1", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+# plot(myOutput, subset = "hour")
+# myOutput <- timeVariation(my_df, pollutant = "pm25", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+# plot(myOutput, subset = "hour")
+# myOutput <- timeVariation(my_df, pollutant = "pm10", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+# plot(myOutput, subset = "hour")
+
+myOutput <- timeVariation(my_df, pollutant = "no", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+plot(myOutput, subset = "hour")
+
+myOutput <- timeVariation(my_df, pollutant = "no2", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+plot(myOutput, subset = "hour")
+
+myOutput <- timeVariation(my_df, pollutant = "o3", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+plot(myOutput, subset = "hour")
+
+myOutput <- timeVariation(my_df, pollutant = "co", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+plot(myOutput, subset = "hour")
+```
+
+## Temporal variability: seasonal by day
+```{r}
+# myOutput <- timeVariation(my_df, pollutant = "pm1", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+# plot(myOutput, subset = "day")
+# myOutput <- timeVariation(my_df, pollutant = "pm25", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+# plot(myOutput, subset = "day")
+# myOutput <- timeVariation(my_df, pollutant = "pm10", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+# plot(myOutput, subset = "day")
+
+myOutput <- timeVariation(my_df, pollutant = "no", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+plot(myOutput, subset = "day")
+
+myOutput <- timeVariation(my_df, pollutant = "no2", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+plot(myOutput, subset = "day")
+
+myOutput <- timeVariation(my_df, pollutant = "o3", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+plot(myOutput, subset = "day")
+
+myOutput <- timeVariation(my_df, pollutant = "co", local.tz= "America/New_York", col = "firebrick", type = "season")#, subset = "hour")
+plot(myOutput, subset = "day")
+
+```
+
+## Directional analysis of pollutants
+
+### Create polar plots (and other things in that family): PM1
+
+```{r}
+# this group of functions allows you to explore the relationship between wind speed, wind direction, and pollutant concentrations. They all give slightly different flavors of the relationship between pollutants and meteorology, so explore and see what stories emerge. 
+
+# There are a bunch of different things you can define here - type (seasonal, etc), statistic (median, mean, max, standard deviation, etc), color scale limits, icon size, figure transparency, etc. In particular, the type and statistic inputs give you *very* different pictures of what's happening in an environment.
+
+polarPlot(my_df, pollutant = "pm1")
+polarPlot(my_df, pollutant = "pm1", type = "month")
+polarPlot(my_df, pollutant = "pm1", type = "season")
+polarPlot(my_df, pollutant = "pm1", limits = c(0,4), type = "month") #limits set relatively arbitrarily - DOES SCOTT HAVE ADVICE?
+polarPlot(my_df, pollutant = "pm1", limits = c(0,4), type = "season")
+polarFreq(my_df, pollutant = "pm1")
+pollutionRose(my_df, pollutant = "pm1")
+polarAnnulus(my_df, pollutant = "pm1")
+# polarCluster(my_df, pollutant = "pm1", n.clusters = 4)
+```
+
+### Create polar plots (and other things in that family): PM2.5
+
+```{r}
+polarPlot(my_df, pollutant = "pm25")
+polarPlot(my_df, pollutant = "pm25", type = "month")
+polarPlot(my_df, pollutant = "pm25", type = "season")
+polarPlot(my_df, pollutant = "pm25", limits = c(0,6), type = "month")
+polarPlot(my_df, pollutant = "pm25", limits = c(0,6), type = "season")
+polarFreq(my_df, pollutant = "pm25")
+pollutionRose(my_df, pollutant = "pm25")
+polarAnnulus(my_df, pollutant = "pm25")
+# polarCluster(my_df, pollutant = "pm25", n.clusters = 4)
+```
+
+### Create polar plots (and other things in that family): PM10
+
+```{r}
+polarPlot(my_df, pollutant = "pm10")
+polarPlot(my_df, pollutant = "pm10", type = "month")
+polarPlot(my_df, pollutant = "pm10", type = "season")
+polarPlot(my_df, pollutant = "pm10", limits = c(0,20), type = "month")
+polarPlot(my_df, pollutant = "pm10", limits = c(0,20), type = "season")
+polarFreq(my_df, pollutant = "pm10")
+pollutionRose(my_df, pollutant = "pm10")
+polarAnnulus(my_df, pollutant = "pm10")
+# polarCluster(my_df, pollutant = "pm10", n.clusters = 4)
+```
+
+### Create polar plots (and other things in that family): NO
+
+```{r}
+polarPlot(my_df, pollutant = "no")
+polarPlot(my_df, pollutant = "no", type = "month")
+polarPlot(my_df, pollutant = "no", type = "season")
+polarPlot(my_df, pollutant = "no", limits = c(0,20), type = "month")
+polarPlot(my_df, pollutant = "no", limits = c(0,20), type = "season")
+polarFreq(my_df, pollutant = "no")
+pollutionRose(my_df, pollutant = "no")
+polarAnnulus(my_df, pollutant = "no")
+# polarCluster(my_df, pollutant = "no", n.clusters = 4)
+```
+
+### Create polar plots (and other things in that family): NO2
+
+```{r}
+polarPlot(my_df, pollutant = "no2")
+polarPlot(my_df, pollutant = "no2", type = "month")
+polarPlot(my_df, pollutant = "no2", type = "season")
+polarPlot(my_df, pollutant = "no2", limits = c(0,60), type = "month")
+polarPlot(my_df, pollutant = "no2", limits = c(0,60), type = "season")
+polarFreq(my_df, pollutant = "no2")
+pollutionRose(my_df, pollutant = "no2")
+polarAnnulus(my_df, pollutant = "no2")
+# polarCluster(my_df, pollutant = "no2", n.clusters = 4)
+```
+
+### Create polar plots (and other things in that family): O3
+
+```{r}
+polarPlot(my_df, pollutant = "o3")
+polarPlot(my_df, pollutant = "o3", type = "month")
+polarPlot(my_df, pollutant = "o3", type = "season")
+polarPlot(my_df, pollutant = "o3", limits = c(0,100), type = "month")
+polarPlot(my_df, pollutant = "o3", limits = c(0,100), type = "season")
+polarFreq(my_df, pollutant = "o3")
+pollutionRose(my_df, pollutant = "o3")
+polarAnnulus(my_df, pollutant = "o3")
+# polarCluster(my_df, pollutant = "o3", n.clusters = 4)
+```
+
+### Create polar plots (and other things in that family): CO
+
+```{r}
+polarPlot(my_df, pollutant = "co")
+polarPlot(my_df, pollutant = "co", type = "month")
+polarPlot(my_df, pollutant = "co", type = "season")
+polarPlot(my_df, pollutant = "co", limits = c(0,600), type = "month")
+polarPlot(my_df, pollutant = "co", limits = c(0,600), type = "season")
+polarFreq(my_df, pollutant = "co")
+pollutionRose(my_df, pollutant = "co")
+polarAnnulus(my_df, pollutant = "co")
+# polarCluster(my_df, pollutant = "co", n.clusters = 4)
+```
+
+
+```{r}
+polarPlot(my_df, pollutant = "nox")
+polarPlot(my_df, pollutant = "nox", type = "month")
+polarPlot(my_df, pollutant = "nox", type = "season")
+polarPlot(my_df, pollutant = "nox", limits = c(0,30), type = "month")
+polarPlot(my_df, pollutant = "nox", limits = c(0,30), type = "season")
+polarFreq(my_df, pollutant = "nox")
+pollutionRose(my_df, pollutant = "nox")
+polarAnnulus(my_df, pollutant = "nox")
+# polarCluster(my_df, pollutant = "nox", n.clusters = 4)
+```
+
+
+```{r}
+polarPlot(my_df, pollutant = "ratio")
+polarPlot(my_df, pollutant = "ratio", type = "month")
+polarPlot(my_df, pollutant = "ratio", type = "season")
+polarPlot(my_df, pollutant = "ratio", limits = c(0,0.2), type = "month")
+polarPlot(my_df, pollutant = "ratio", limits = c(0,0.2), type = "season")
+polarFreq(my_df, pollutant = "ratio")
+pollutionRose(my_df, pollutant = "ratio")
+polarAnnulus(my_df, pollutant = "ratio")
+# polarCluster(my_df, pollutant = "ratio", n.clusters = 4)
+```
+
+### Create Polar map plots
+
+```{r}
+#polarMap is an extension of polarPlot that places a polarPlot onto a map as an overlay. polarPlot is in a family of plots that include pollutionRose, polarAnnulus, polarFreq, percentileRose, and others that give slightly different visualizations of the same combined pollutant/met data. You should play with some of these too.
+
+# There are a bunch of different things you can define here - type (seasonal, etc), statistic (median, mean, max, standard deviation, etc), color scale limits, icon size, figure transparency, etc. In particular, the type and statistic inputs give you *very* different pictures of what's happening in an environment.
+
+polarMap(my_df,
+         pollutant = "pm1",
+         key.position = "bottom",
+         key.header = "PM1 (ug/m3)",
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+
+
+polarMap(my_df,
+         pollutant = "pm25",
+         key.position = "bottom",
+         key.header = "PM25 (ug/m3)",
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+#         limits = c(0, 4),
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+
+polarMap(my_df,
+         pollutant = "pm10",
+         key.position = "bottom",
+         key.header = "PM10 (ug/m3)",
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+
+polarMap(my_df,
+         pollutant = "ratio",
+         key.position = "bottom",
+         key.header = "NOx/CO",
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+```
+### Create Polar plots with multiple sensors
+
+```{r}
+
+```
+
+### Create some calendar plots to explore long-term temporal trends
+
+```{r}
+# These can help identify specific dates or ranges of dates that had particularly high pollutant concentrations. You may want to look more closely at conspicuously elevated pollutant days.
+
+# calendarPlot(my_df, pollutant = "pm10")
+calendarPlot(my_df, pollutant = "pm1", limits = c(0,6))
+calendarPlot(my_df, pollutant = "pm25", limits = c(0,6))
+calendarPlot(my_df, pollutant = "pm10", limits = c(0,80))
+calendarPlot(my_df, pollutant = "no", limits = c(0,6))
+calendarPlot(my_df, pollutant = "no2", limits = c(0,60))
+calendarPlot(my_df, pollutant = "o3", limits = c(0,100))
+calendarPlot(my_df, pollutant = "co", limits = c(0,600))
+
+# 
+# calendarPlot(my_df, pollutant = "pm10", annotate = "value", limits = c(0,80),
+# lim =50, cols = "Purples", col.lim = c("black", "orange"), layout = c(4, 3))
+#
+```
+
+
+```{r}
+trendLevel(my_df, pollutant = "pm1", limits = c(0,20))
+trendLevel(my_df, pollutant = "pm25", limits = c(0,20))
+trendLevel(my_df, pollutant = "pm10", limits = c(0,60))
+trendLevel(my_df, pollutant = "no", limits = c(0,40))
+trendLevel(my_df, pollutant = "no2", limits = c(0,40))
+trendLevel(my_df, pollutant = "o3", limits = c(0,60))
+trendLevel(my_df, pollutant = "co", limits = c(0,600))
+```
+### Potential plots for one-pagers
+
+```{r}
+# NO2
+
+# statistic = average, avg.time = day
+timePlot(my_df, pollutant="no2", avg.time="day", col = "blue", main = "Average Daily NO2 Concentration (ppb)", ylim = c(0,55))
+trellis.last.object() + layer(panel.abline(h=12.86, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=53, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = average, avg.time = hour
+timePlot(my_df, pollutant="no2", avg.time="hour", col = "blue", main = "Average Hourly NO2 Concentration (ppb)", ylim = c(0,55))
+trellis.last.object() + layer(panel.abline(h=12.86, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=53, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = median, avg.time = day
+timePlot(my_df, pollutant="no2", statistic="median", avg.time="day", col = "blue", main = "Median Daily NO2 Concentration (ppb)", ylim = c(0,55))
+trellis.last.object() + layer(panel.abline(h=12.86, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=53, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = median, avg.time = hour
+timePlot(my_df, pollutant="no2", statistic="median", avg.time="hour", col = "blue", main = "Median Hourly NO2 Concentration (ppb)", ylim = c(0,55))
+trellis.last.object() + layer(panel.abline(h=12.86, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=53, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = max, avg.time = day
+timePlot(my_df, pollutant="no2", statistic="max", avg.time="day", col = "blue", main = "Max Daily NO2 Concentration (ppb)", ylim = c(0,65))
+trellis.last.object() + layer(panel.abline(h=12.86, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=53, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = max, avg.time = hour
+timePlot(my_df, pollutant="no2", statistic="max", avg.time="hour", col = "blue", main = "Max Hourly NO2 Concentration (ppb)", ylim = c(0,65))
+trellis.last.object() + layer(panel.abline(h=12.86, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=53, col="red", lwd=3, lty=2)) #EPA standard
+```
+
+
+```{r}
+# PM2.5
+
+# statistic = average, avg.time = day
+timePlot(my_df, pollutant="pm25", avg.time="day", col = "blue", main = "Average Daily PM25 Concentration (ug/m3)")
+trellis.last.object() + layer(panel.abline(h=5, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=9, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = average, avg.time = hour
+timePlot(my_df, pollutant="pm25", avg.time="hour", col = "blue", main = "Average Hourly PM25 Concentration (ug/m3)")
+trellis.last.object() + layer(panel.abline(h=5, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=9, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = median, avg.time = day
+timePlot(my_df, pollutant="pm25", statistic="median", avg.time="day", col = "blue", main = "Median Daily PM25 Concentration (ug/m3)")
+trellis.last.object() + layer(panel.abline(h=5, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=9, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = median, avg.time = hour
+timePlot(my_df, pollutant="pm25", statistic="median", avg.time="hour", col = "blue", main = "Median Hourly PM25 Concentration (ug/m3)")
+trellis.last.object() + layer(panel.abline(h=5, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=9, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = max, avg.time = day
+timePlot(my_df, pollutant="pm25", statistic="max", avg.time="day", col = "blue", main = "Max Daily PM25 Concentration (ug/m3)")
+trellis.last.object() + layer(panel.abline(h=5, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=9, col="red", lwd=3, lty=2)) #EPA standard
+
+# statistic = max, avg.time = hour
+timePlot(my_df, pollutant="pm25", statistic="max", avg.time="hour", col = "blue", main = "Max Hourly PM25 Concentration (ug/m3)")
+trellis.last.object() + layer(panel.abline(h=5, col="orange", lwd=3, lty=2)) #WHO recommendation
+trellis.last.object() + layer(panel.abline(h=9, col="red", lwd=3, lty=2)) #EPA standard
+```
+
+
+```{r}
+# PM1
+
+# statistic = average, avg.time = day
+timePlot(my_df, pollutant="pm1", avg.time="day", col = "blue", main = "Average Daily PM1 Concentration (ug/m3)")
+
+# statistic = average, avg.time = hour
+timePlot(my_df, pollutant="pm1", avg.time="hour", col = "blue", main = "Average Hourly PM1 Concentration (ug/m3)")
+
+# statistic = median, avg.time = day
+timePlot(my_df, pollutant="pm1", statistic="median", avg.time="day", col = "blue", main = "Median Daily PM1 Concentration (ug/m3)")
+
+# statistic = median, avg.time = hour
+timePlot(my_df, pollutant="pm1", statistic="median", avg.time="hour", col = "blue", main = "Median Hourly PM1 Concentration (ug/m3)")
+
+# statistic = max, avg.time = day
+timePlot(my_df, pollutant="pm1", statistic="max", avg.time="day", col = "blue", main = "Max Daily PM1 Concentration (ug/m3)")
+
+# statistic = max, avg.time = hour
+timePlot(my_df, pollutant="pm1", statistic="max", avg.time="hour", col = "blue", main = "Max Hourly PM1 Concentration (ug/m3)")
+```
+### Investigate correlations between pollutants in case they can give insights about regulatory limits for PM1
+
+```{r}
+cor(my_df$pm1, my_df$ratio, use = "complete.obs")
+
+cor(my_df$pm25, my_df$ratio, use = "complete.obs")
+
+cor(my_df$no2, my_df$ratio, use = "complete.obs")
+
+cor(my_df$pm1, my_df$no2, use = "complete.obs")
+
+cor(my_df$pm1, my_df$pm25, use = "complete.obs")
+
+cor(my_df$pm25, my_df$no2, use = "complete.obs")
+
+cor(my_df$nox, my_df$co, use = "complete.obs")
+```
+### Polar maps with multiple sensors
+
+```{r}
+# this requires at least 2 sensors to be loaded into my_df
+polarMap(my_df,
+         pollutant = "pm25",
+         key.position = "bottom",
+         key.header = "PM25 (ug/m3)",
+         key.footer = NULL,
+         x = "ws",
+         latitude = "lat",
+         longitude = "lon",
+         provider = "OpenStreetMap",
+         cols = "jet",
+         alpha = 0.8,
+         key = TRUE,
+         iconWidth = 200,
+         iconHeight = 200,
+         fig.width = 4,
+         fig.height = 4
+         )
+
+
+
+```
