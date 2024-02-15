@@ -28,6 +28,7 @@ load("./data/roxbury_df_filtered.RData")
 summary(mod_met_filtered %>% filter(mod_met_filtered$sn == 'MOD-00024'))
 summary(mod_met_filtered %>% filter(mod_met_filtered$sn == 'MOD-00025'))
 summary(mod_met_filtered %>% filter(mod_met_filtered$sn == 'MOD-00028'))
+summary(mod_met_filtered %>% filter(mod_met_filtered$sn == 'MOD-PM-00222'))
 ```
 
 # Plot Nubian NOx/CO ratio
@@ -40,40 +41,112 @@ mod_met_filtered$ratio <- mod_met_filtered$nox / mod_met_filtered$co
 nubian_df <- mod_met_filtered %>%
       filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025', 'MOD-00028'))
 
-for (pollutant in c('ratio', 'pm1', 'co', 'nox')) {
-  polarMap(nubian_df,
-     pollutant = 'ratio',
-     key.position = "bottom",
-     key.header = 'ratio',
-     key.footer = NULL,
-     x = "ws",
-     latitude = "lat",
-     longitude = "lon",
-     provider = "OpenStreetMap",
-     limits = c(0, 0.15),
-     cols = "jet",
-     alpha = 0.8,
-     key = TRUE,
-     iconWidth = 200,
-     iconHeight = 200,
-     fig.width = 4,
-     fig.height = 4
-   )
-}
+polarMap(nubian_df,
+   pollutant = 'ratio',
+   key.position = "bottom",
+   key.header = 'NOx:CO ratio',
+   key.footer = NULL,
+   x = "ws",
+   latitude = "lat",
+   longitude = "lon",
+   provider = "OpenStreetMap",
+   limits = c(0, 0.15),
+   cols = "jet",
+   alpha = 0.8,
+   key = TRUE,
+   iconWidth = 200,
+   iconHeight = 200,
+   fig.width = 4,
+   fig.height = 4
+ )
+
+polarMap(nubian_df,
+   pollutant = 'pm1',
+   key.position = "bottom",
+   key.header = 'PM1',
+   key.footer = NULL,
+   x = "ws",
+   latitude = "lat",
+   longitude = "lon",
+   provider = "OpenStreetMap",
+   limits = c(0, 3),
+   cols = "jet",
+   alpha = 0.8,
+   key = TRUE,
+   iconWidth = 200,
+   iconHeight = 200,
+   fig.width = 4,
+   fig.height = 4
+ )
+
+
+polarMap(nubian_df,
+   pollutant = 'co',
+   key.position = "bottom",
+   key.header = 'CO',
+   key.footer = NULL,
+   x = "ws",
+   latitude = "lat",
+   longitude = "lon",
+   provider = "OpenStreetMap",
+   limits = c(0, 300),
+   cols = "jet",
+   alpha = 0.8,
+   key = TRUE,
+   iconWidth = 200,
+   iconHeight = 200,
+   fig.width = 4,
+   fig.height = 4
+ )
+
+
+polarMap(nubian_df,
+   pollutant = 'nox',
+   key.position = "bottom",
+   key.header = 'NOx',
+   key.footer = NULL,
+   x = "ws",
+   latitude = "lat",
+   longitude = "lon",
+   provider = "OpenStreetMap",
+   limits = c(0, 30),
+   cols = "jet",
+   alpha = 0.8,
+   key = TRUE,
+   iconWidth = 200,
+   iconHeight = 200,
+   fig.width = 4,
+   fig.height = 4
+ )
 ```
 
 
 ## Time plot
 ```{r}
-nubian_df <- mod_met_filtered %>%
+no2_df <- mod_met_filtered %>%
       filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025', 'MOD-00028'))
 
-nubian_df$date <- round_date(nubian_df$date, unit = "minute")
-nubian_df <- pivot_wider(nubian_df, id_cols = date, names_from = sn, values_from = c(no2, nox), values_fn = {mean})
-names(nubian_df)
+no2_df$date <- round_date(no2_df$date, unit = "minute")
+no2_df <- pivot_wider(no2_df, id_cols = date, names_from = sn, values_from = no2, values_fn = {mean})
+names(no2_df)
+timePlot(no2_df, pollutant=c("MOD-00024", "MOD-00025", "MOD-00028"), ylim=c(0, 80), avg.time = "week", group=TRUE, lty=1)
+```
+
+## Calendar plot
+We saw a big dip in MOD-00028's NO2 level around November 14th, 2022. We think this may have been because the sensor was moved, but we didn't see any changes in the `lat` or `lon` variables.
+```{r}
+my_df <- mod_met_filtered %>%
+      filter(mod_met_filtered$sn == 'MOD-00028')
+calendarPlot(my_df, pollutant = 'no2', main='no2')
+```
+
+
+## Summary statistics
+```{r}
 summary(nubian_df)
-sd(nubian_df)
-# timePlot(nubian_df, pollutant=c("MOD-00024", "MOD-00025", "MOD-00028"), ylim=c(0, 80), avg.time = "week", group=TRUE, lty=1)
+sd(nubian_df$`no2_MOD-00024`, na.rm=TRUE)
+sd(nubian_df$`no2_MOD-00025`, na.rm=TRUE)
+sd(nubian_df$`no2_MOD-00028`, na.rm=TRUE)
 ```
 
 # Data prep for MOD-00025
