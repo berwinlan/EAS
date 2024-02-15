@@ -34,39 +34,46 @@ summary(mod_met_filtered %>% filter(mod_met_filtered$sn == 'MOD-00028'))
 ## Map
 ```{r}
 # Calculate NOx to CO ratio for diesel combustion
-mod_met_filtered$ratio <- (mod_met_filtered$no + mod_met_filtered$no2) / mod_met_filtered$co
+mod_met_filtered$nox <- (mod_met_filtered$no + mod_met_filtered$no2)
+mod_met_filtered$ratio <- mod_met_filtered$nox / mod_met_filtered$co
 
 nubian_df <- mod_met_filtered %>%
       filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025', 'MOD-00028'))
 
-polarMap(nubian_df,
-         pollutant = 'ratio',
-         key.position = "bottom",
-         key.header = 'ratio',
-         key.footer = NULL,
-         x = "ws",
-         latitude = "lat",
-         longitude = "lon",
-         provider = "OpenStreetMap",
-         limits = c(0, 0.15),
-         cols = "jet",
-         alpha = 0.8,
-         key = TRUE,
-         iconWidth = 200,
-         iconHeight = 200,
-         fig.width = 4,
-         fig.height = 4
-         )
+for (pollutant in c('ratio', 'pm1', 'co', 'nox')) {
+  polarMap(nubian_df,
+     pollutant = 'ratio',
+     key.position = "bottom",
+     key.header = 'ratio',
+     key.footer = NULL,
+     x = "ws",
+     latitude = "lat",
+     longitude = "lon",
+     provider = "OpenStreetMap",
+     limits = c(0, 0.15),
+     cols = "jet",
+     alpha = 0.8,
+     key = TRUE,
+     iconWidth = 200,
+     iconHeight = 200,
+     fig.width = 4,
+     fig.height = 4
+   )
+}
 ```
+
 
 ## Time plot
 ```{r}
-no2_df = mod_met_filtered %>% filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025', 'MOD-00028'))
+nubian_df <- mod_met_filtered %>%
+      filter(mod_met_filtered$sn %in% c('MOD-00024', 'MOD-00025', 'MOD-00028'))
 
-no2_df$date <- round_date(no2_df$date, unit = "minute")
-no2_df <- pivot_wider(no2_df, id_cols = date, names_from = sn, values_from = no2, values_fn = {mean})
-names(no2_df)
-timePlot(no2_df, pollutant=c("MOD-00024", "MOD-00025", "MOD-00028"), ylim=c(0, 80), avg.time = "week", group=TRUE, lty=1)
+nubian_df$date <- round_date(nubian_df$date, unit = "minute")
+nubian_df <- pivot_wider(nubian_df, id_cols = date, names_from = sn, values_from = c(no2, nox), values_fn = {mean})
+names(nubian_df)
+summary(nubian_df)
+sd(nubian_df)
+# timePlot(nubian_df, pollutant=c("MOD-00024", "MOD-00025", "MOD-00028"), ylim=c(0, 80), avg.time = "week", group=TRUE, lty=1)
 ```
 
 # Data prep for MOD-00025
