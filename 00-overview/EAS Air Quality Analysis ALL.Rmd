@@ -79,7 +79,7 @@ library(openairmaps) #this package will allow us to superimpose openair figures 
 
 ```{r}
 # Here's where you'll define the file path for your data file and load the data.
-data_file <- "./data/quant_aq/MOD-PM-00545-Montreal.csv"  # Data file path for AQ data
+data_file <- "./data/quant_aq/MOD-00025-Roxbury.csv"  # Data file path for AQ data
 aq_df <- read_csv(data_file)  # Load the data with read_csv command (there are a bunch of ways to get this done, but this one is efficient and quick). This creates a data frame called "aq_df".
 
 
@@ -202,7 +202,7 @@ timePlot(selectByDate(aq_df_filtered, year=2023, month=6), pollutant = c("pm1", 
 # Now we'll import and sync meteorology data set up analysis of air pollutant concentrations related to local meteorology.
 
 # Set directory and file for met data
-met_file <- "data/met/montreal_met.csv"
+met_file <- "data/met/boston_met.csv"
 
 # Read met data
 metdata <- fread(met_file, header=TRUE, data.table = TRUE) #import meteorology file using a different method than we used above
@@ -287,9 +287,10 @@ timeVariation(aq_df_met, pollutant = c("pm1", "pm25", "pm10"), local.tz= "Americ
 # Montreal: 45.392796,-74.062294
 # Pueblo: 38.16,-104.624
 # Hartford: 41.784874,-72.6315
+# MOD 25: 42.32862119, -71.086748391
 
-aq_df_met$lat <- 45.392796
-aq_df_met$long <- -74.062294
+aq_df_met$lat <- 42.32862119
+aq_df_met$long <- -71.086748391
 
 
 ```
@@ -301,15 +302,18 @@ aq_df_met$long <- -74.062294
 
 # There are a bunch of different things you can define here - type (seasonal, etc), statistic (median, mean, max, standard deviation, etc), color scale limits, icon size, figure transparency, etc. In particular, the type and statistic inputs give you *very* different pictures of what's happening in an environment.
 
-polarPlot(aq_df_met, pollutant = "pm10")
-polarPlot(aq_df_met, pollutant = "pm10", type = "season")
-polarPlot(aq_df_met, pollutant = "pm10", limits = c(0,8), type = "season")
-polarFreq(aq_df_met, pollutant = "pm10")
-pollutionRose(aq_df_met, pollutant = "pm10")
-polarAnnulus(aq_df_met, pollutant = "pm10")
-polarCluster(aq_df_met, pollutant = "pm10", n.clusters = 4)
+polarPlot(selectByDate(aq_df_met, year='2023', month=c(1, 7)), pollutant = "pm10", main="PM10 During construction (1/2023-7/2023)", limits = c(0, 40))
+polarPlot(selectByDate(aq_df_met, year='2023', month=c(8, 12)), pollutant = "pm10", main="PM10 After construction (8/2023-12/2023)", limits = c(0, 40))
 
+# polarPlot(aq_df_met, pollutant = "pm10", type = "season")
+# polarPlot(aq_df_met, pollutant = "pm10", limits = c(0,8), type = "season")
+# polarFreq(aq_df_met, pollutant = "pm10")
+# pollutionRose(aq_df_met, pollutant = "pm10")
+# polarAnnulus(aq_df_met, pollutant = "pm10")
+# polarCluster(aq_df_met, pollutant = "pm10", n.clusters = 4)
 
+aq_df_met$ratio <- (aq_df_met$no + aq_df_met$no2) / aq_df_met(co)
+polarPlot(aq_df_met, pollutant = "ratio")
 
 
 ```
@@ -321,16 +325,16 @@ polarCluster(aq_df_met, pollutant = "pm10", n.clusters = 4)
 
 # There are a bunch of different things you can define here - type (seasonal, etc), statistic (median, mean, max, standard deviation, etc), color scale limits, icon size, figure transparency, etc. In particular, the type and statistic inputs give you *very* different pictures of what's happening in an environment.
 
-polarMap(aq_df_met,
-         pollutant = "pm1", 
+polarMap(selectByDate(aq_df_met, year='2023', month=c(1, 7)),
+         pollutant = "pm10", 
          key.position = "bottom",
-         key.header = "PM1 (ug/m3)", 
+         key.header = "PM10 (ug/m3)", 
          key.footer = NULL, 
          x = "ws",
          latitude = "lat",
          longitude = "long", 
          provider = "OpenStreetMap",
-         limits = c(0, 15),
+         limits = c(0, 40),
          cols = "jet",
          alpha = 0.8,
          key = TRUE,
@@ -341,16 +345,16 @@ polarMap(aq_df_met,
          )
 
 
-polarMap(aq_df_met,
-         pollutant = "no", 
+polarMap(selectByDate(aq_df_met, year='2023', month=c(8, 12)),
+         pollutant = "pm10", 
          key.position = "bottom",
-         key.header = "NO (ppb)", 
+         key.header = "PM10 (ug/m3)", 
          key.footer = NULL, 
          x = "ws",
          latitude = "lat",
          longitude = "long", 
          provider = "OpenStreetMap",
-         limits = c(0, 4),
+         limits = c(0, 40),
          cols = "jet",
          alpha = 0.8,
          key = TRUE,
@@ -361,18 +365,38 @@ polarMap(aq_df_met,
          )
 
 
-polarMap(aq_df_met,
-         pollutant = "no", 
-         key.position = "bottom",
-         key.header = "NO (ppb)", 
-         x = "ws",
-         latitude = "lat",
-         longitude = "long", 
-         provider = "OpenStreetMap",
-         limits = c(0, 4),
-         cols = "jet",
-         key = TRUE,
-         )
+# polarMap(aq_df_met,
+#          pollutant = "no", 
+#          key.position = "bottom",
+#          key.header = "NO (ppb)", 
+#          key.footer = NULL, 
+#          x = "ws",
+#          latitude = "lat",
+#          longitude = "long", 
+#          provider = "OpenStreetMap",
+#          limits = c(0, 4),
+#          cols = "jet",
+#          alpha = 0.8,
+#          key = TRUE,
+#          iconWidth = 200,
+#          iconHeight = 200,
+#          fig.width = 4,
+#          fig.height = 4
+#          )
+# 
+# 
+# polarMap(aq_df_met,
+#          pollutant = "no", 
+#          key.position = "bottom",
+#          key.header = "NO (ppb)", 
+#          x = "ws",
+#          latitude = "lat",
+#          longitude = "long", 
+#          provider = "OpenStreetMap",
+#          limits = c(0, 4),
+#          cols = "jet",
+#          key = TRUE,
+#          )
 
 ```
 
@@ -381,8 +405,8 @@ polarMap(aq_df_met,
 ```{r}
 # These can help identify specific dates or ranges of dates that had particularly high pollutant concentrations. You may want to look more closely at conspicuously elevated pollutant days.
 
-calendarPlot(aq_df_met, pollutant = "pm10")
-calendarPlot(aq_df_met, pollutant = "pm10", limits = c(0,80))
+calendarPlot(selectByDate(aq_df_met, year='2023'), pollutant = "pm10")
+calendarPlot(selectByDate(aq_df_met, year='2023'), pollutant = "pm10", limits = c(0,70))
 
 
 calendarPlot(aq_df_met, pollutant = "pm10", annotate = "value", limits = c(0,80),
