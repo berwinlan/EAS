@@ -21,6 +21,14 @@ def get_data():
 
     return df
 
+def get_concentrations(df: pd.DataFrame):
+    """
+    Return a df with only concentrations.
+    """
+    cols = [c for c in cols if 'Concentration' in c]
+
+    return df[cols]
+
 def main():
     data = get_data()
     print(data.head())
