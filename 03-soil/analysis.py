@@ -25,7 +25,7 @@ def get_concentrations(df: pd.DataFrame):
     """
     Return a df with only concentrations.
     """
-    cols = [c for c in cols if 'Concentration' in c]
+    cols = [c for c in cols if 'Concentration' in c].append('info')
 
     return df[cols]
 
