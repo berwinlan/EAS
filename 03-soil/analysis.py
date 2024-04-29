@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 POLLUTANTS = []
 ERRORS = []
 
-LIMITS = dict()
+LIMITS = {"Pb Concentration": 100, "Mn Concentration": 5500, "Cu Concentration": 500}
 
 
 def get_data():
@@ -45,23 +45,26 @@ def generate_plots(df: pd.DataFrame, debug=False):
         plt.rcParams["figure.figsize"] = (20, 10)
 
         # Plot data and error bars
-        plt.bar(sites, df[p])
+        plt.bar(df[df["site"]=='A']['info'], df[df["site"]=='A'][p], color='dodgerblue', label="Site A")
+        plt.bar(df[df["site"]=='B']['info'], df[df["site"]=='B'][p], color='limegreen', label="Site B")
+        plt.bar(df[df["site"]=='C']['info'], df[df["site"]=='C'][p], color='orchid', label="Site C")
+        plt.bar(df[df["site"]=='D']['info'], df[df["site"]=='D'][p], color='gold', label="Site D")
+
         plt.errorbar(
             sites, df[p], df[err], ecolor="r", barsabove=True, fmt="r.", markersize=1
         )
 
         # Add an hline for EPA limits if specified
-        try:
-            lim = LIMITS[p]
-            plt.axhline(y=lim)
-        except KeyError:
-            pass
+        if lim := LIMITS.get(p):
+            plt.axhline(y=lim, color="k", linestyle="--")
+            plt.annotate(f"EPA Standard: {lim} ppm", (60, lim), textcoords="offset points", xytext=(0, 10), ha='center')
 
         # Style plot
         plt.title(str(p))
         plt.xlabel("Site Code")
         plt.ylabel("Concentration (ppm)")
         plt.xticks(rotation=90)
+        plt.legend()
 
         if debug:
             plt.show()
