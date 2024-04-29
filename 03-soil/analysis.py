@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 POLLUTANTS = []
 ERRORS = []
 
+LIMITS = dict()
+
 def get_data():
     global POLLUTANTS, ERRORS
     df = pd.read_csv('xrf_data.csv')
@@ -61,6 +63,12 @@ def generate_plots(df: pd.DataFrame, debug=False):
         # Plot data and error bars
         plt.bar(sites, df[p])
         plt.errorbar(sites, df[p], df[err], ecolor='r', barsabove=True, fmt='r.', markersize=1)
+
+        try:
+            lim = LIMITS[p]
+            plt.axhline(y=lim)
+        except KeyError:
+            pass
 
         # Style plot
         plt.title(str(p))
