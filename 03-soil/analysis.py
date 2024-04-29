@@ -3,9 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 POLLUTANTS = []
+ERRORS = []
 
 def get_data():
-    global POLLUTANTS
+    global POLLUTANTS, ERRORS
     df = pd.read_csv('xrf_data.csv')
 
     # Parse out sampling codes
@@ -16,8 +17,9 @@ def get_data():
     # Grab relevant data
     cols = df.columns.astype(str).tolist()
     POLLUTANTS = [c for c in cols if 'Concentration' in c]
-    col_filter = [c for c in cols if 'Concentration' in c or 'Error1s' in c]
-    df[col_filter] = df[col_filter].apply(pd.to_numeric, errors='coerce') #cast to int
+    ERRORS = [c for c in cols if 'Error1s' in c]
+    col_filter = POLLUTANTS + ERRORS
+    df[col_filter] = df[col_filter].apply(pd.to_numeric, errors='coerce') # cast to int
 
     df = df.sort_values(by=['site', 'depth', 'coordinate'])
 
@@ -28,30 +30,50 @@ def get_data():
 
     return df_filtered
 
-def get_concentrations(df: pd.DataFrame):
+def get_concentrations(df: pd.DataFrame) -> pd.DataFrame:
     """
     Return a df with only concentrations.
     """
     cols = df.columns.astype(str).tolist()
-    cols = [c for c in cols if 'Concentration' in c] + ['info']
+    cols = POLLUTANTS + ['info']
 
     return df[cols]
 
-def generate_plots(df: pd.DataFrame):
+def get_error1s(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Get only 1SD Error.
+    """
+    cols = df.columns.astype(str).tolist()
+    cols = ERRORS + ['info']
+
+    return df[cols]
+
+def generate_plots(df: pd.DataFrame, debug=False):
     """
     df has concentrations
     """
     sites = df['info']
-    for p in POLLUTANTS:
+
+    for p, err in zip(POLLUTANTS, ERRORS):
         plt.figure()
         plt.rcParams["figure.figsize"] = (20, 10)
+
+        # Plot data and error bars
         plt.bar(sites, df[p])
-        plt.title("{}".format(p))
+        plt.errorbar(sites, df[p], df[err], ecolor='r', barsabove=True, fmt='r.', markersize=1)
+
+        # Style plot
+        plt.title(str(p))
         plt.xlabel("Site Code")
         plt.ylabel("Concentration (ppm)")
         plt.xticks(rotation=90)
-        plt.savefig(f"out/{p.replace(' ', '_')}.png", bbox_inches='tight', dpi=300)
-        plt.close()
+
+        if debug:
+            plt.show()
+        else:
+            # Save plot
+            plt.savefig(f"out/{p.replace(' ', '_')}.png", bbox_inches='tight', dpi=300)
+            plt.close()
 
 
 def main():
