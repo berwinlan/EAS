@@ -59,6 +59,11 @@ def generate_plots(df: pd.DataFrame, debug=False):
             plt.axhline(y=lim, color="k", linestyle="--")
             plt.annotate(f"EPA Standard: {lim} ppm", (60, lim), textcoords="offset points", xytext=(0, 10), ha='center')
 
+        # If manganese, highlight and label the background levels
+        if p == 'Mn Concentration':
+            plt.axhspan(40, 900, color='green', alpha=0.2)
+            plt.annotate(f"Background level: 40-900 ppm", (60, 900), textcoords="offset points", xytext=(0, 10), ha='center')
+
         # Style plot
         plt.title(str(p))
         plt.xlabel("Site Code")
